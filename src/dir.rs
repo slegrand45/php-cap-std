@@ -308,20 +308,17 @@ impl StephpCapStdDir {
     ) -> Result<(), String> {
         #[cfg(unix)]
         {
-            use std::os::unix::io::AsRawFd;
-            let empty_path = std::ffi::CString::new("").map_err(|e| e.to_string())?;
-            let times = times_to_timespec(atime, mtime);
-            let res = unsafe {
-                libc::utimensat(
-                    self.inner.as_raw_fd(),
-                    empty_path.as_ptr(),
-                    times.as_ptr(),
-                    libc::AT_EMPTY_PATH,
-                )
+            let timestamps = rustix::fs::Timestamps {
+                last_access: system_time_to_timespec(atime),
+                last_modification: system_time_to_timespec(mtime),
             };
-            if res != 0 {
-                return Err(std::io::Error::last_os_error().to_string());
-            }
+            rustix::fs::utimensat(
+                &self.inner,
+                "",
+                &timestamps,
+                rustix::fs::AtFlags::EMPTY_PATH,
+            )
+            .map_err(|e| e.to_string())?;
             Ok(())
         }
         #[cfg(not(unix))]
@@ -340,18 +337,15 @@ impl StephpCapStdDir {
     ) -> Result<(), String> {
         #[cfg(unix)]
         {
-            use std::os::unix::io::AsRawFd;
             if path == "." || path.is_empty() {
                 return self.set_own_times(atime, mtime);
             }
-            let c_path = std::ffi::CString::new(path).map_err(|e| e.to_string())?;
-            let times = times_to_timespec(atime, mtime);
-            let res = unsafe {
-                libc::utimensat(self.inner.as_raw_fd(), c_path.as_ptr(), times.as_ptr(), 0)
+            let timestamps = rustix::fs::Timestamps {
+                last_access: system_time_to_timespec(atime),
+                last_modification: system_time_to_timespec(mtime),
             };
-            if res != 0 {
-                return Err(std::io::Error::last_os_error().to_string());
-            }
+            rustix::fs::utimensat(&self.inner, path, &timestamps, rustix::fs::AtFlags::empty())
+                .map_err(|e| e.to_string())?;
             Ok(())
         }
         #[cfg(not(unix))]
@@ -369,25 +363,21 @@ impl StephpCapStdDir {
 }
 
 #[cfg(unix)]
-fn times_to_timespec(
-    atime: Option<&StephpCapStdSystemTime>,
-    mtime: Option<&StephpCapStdSystemTime>,
-) -> [libc::timespec; 2] {
-    let to_spec = |opt: Option<&StephpCapStdSystemTime>| match opt {
+fn system_time_to_timespec(time: Option<&StephpCapStdSystemTime>) -> rustix::fs::Timespec {
+    match time {
         Some(t) => {
             let dur = t
                 .inner
                 .duration_since(cap_std::time::SystemTime::from_std(std::time::UNIX_EPOCH))
                 .unwrap_or_default();
-            libc::timespec {
-                tv_sec: dur.as_secs() as libc::time_t,
-                tv_nsec: dur.subsec_nanos() as libc::c_long,
+            rustix::fs::Timespec {
+                tv_sec: dur.as_secs() as _,
+                tv_nsec: dur.subsec_nanos() as _,
             }
         }
-        None => libc::timespec {
+        None => rustix::fs::Timespec {
             tv_sec: 0,
-            tv_nsec: libc::UTIME_OMIT,
+            tv_nsec: rustix::fs::UTIME_OMIT,
         },
-    };
-    [to_spec(atime), to_spec(mtime)]
+    }
 }

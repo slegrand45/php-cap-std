@@ -1,4 +1,5 @@
 #![cfg_attr(windows, feature(abi_vectorcall))]
+#![forbid(unsafe_code)]
 
 mod dir;
 mod dirbuilder;

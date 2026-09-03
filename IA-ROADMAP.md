@@ -18,12 +18,12 @@
 
 Deux découvertes importantes issues de la vérification de l'API cap-std 4.0.2 :
 
-- **`Dir::set_times(path, ...)` n'existe pas dans cap-std** — cap-std n'offre le SetTimes que sur un handle ouvert. Implémenté via `utimensat` (POSIX direct sur `dirfd`) pour `set_own_times()` et `set_times(path, atime, mtime)`, évitant le piège de `EBADF` lié aux descripteurs `O_PATH` sous Linux.
+- **`Dir::set_times(path, ...)` n'existe pas dans cap-std** — cap-std n'offre le SetTimes que sur un handle ouvert. Implémenté de manière 100% sûre (`forbid(unsafe_code)`) via `rustix::fs::utimensat` (POSIX direct et sûr sur `dirfd`) pour `set_own_times()` et `set_times(path, atime, mtime)`, sans aucun bloc `unsafe` ni manipulation FFI.
 - **`open_parent_dir(auth)`** : omis volontairement car il sort du sandbox par conception.
 
 Ordre de valeur :
 
-1. `Dir::set_times`, `Dir::set_own_times`, `Dir::try_exists` (implémentés et testés)
+1. `Dir::set_times`, `Dir::set_own_times`, `Dir::try_exists` (implémentés et testés en safe Rust)
 2. Classe `StephpCapStdDirBuilder` (mode, recursive) + `Dir::create_dir_with` (implémentés et testés)
 3. `Dir::read_link_contents`, `Dir::symlink_contents` (implémentés et testés)
 4. `File::read_at` / `write_at` / `read_exact_at` / `write_all_at` (Unix `FileExt` — I/O à offset fixe, implémentés et testés)
@@ -41,7 +41,7 @@ Ordre de valeur :
 
 1. **GitHub Actions** (`.github/workflows/ci.yml`) : validation automatique sous Ubuntu (`cargo fmt --check`, `cargo clippy -D warnings`, `cargo build --release`, suite de tests PHP).
 2. **Makefile** : cibles `build`, `build-debug`, `test`, `lint`, `fmt`, `fmt-check`, `check`, `clean`.
-3. Synchronisation de la version à **0.6.0** dans `Cargo.toml` et `README.md`.
+3. Synchronisation de la version à **0.6.0** dans `Cargo.toml` et `README.md`, avec interdiction stricte de code unsafe (`[lints.rust] unsafe_code = "forbid"`).
 
 ## Phase 4 — Évolutions stratégiques (P3)
 
@@ -60,6 +60,6 @@ Ordre de valeur :
 | Date | Phase | Statut | Détail |
 |---|---|---|---|
 | 2026-09-03 | Phase 0 | ✅ Terminée | README (exemple `::new()`, nom du dépôt, API complétée) ; stubs réécrits avec DocBlocks, `__construct` factices et `Entries::new()` supprimés ; `Permissions::new()` et `OpenOptions::mode()` retournent désormais `Result` (breaking, justifie 0.6.0) ; constructeur interne d'Entries sorti du `#[php_impl]` (masqué côté PHP) ; `NOTES-TMP.txt` supprimé (idées restantes reprises dans Phase 4 / non-objectifs). Suite PHP : 114 OK / 0 KO. |
-| 2026-09-04 | Phase 1 | ✅ Terminée | Ajout de `Dir::try_exists`, `Dir::set_own_times`, `Dir::set_times` (via `utimensat`), `StephpCapStdDirBuilder` + `Dir::create_dir_with`, `Dir::read_link_contents`, `Dir::symlink_contents`, `File::read_at`/`read_exact_at`/`write_at`/`write_all_at`, `OpenOptions::custom_flags`, constantes `StephpCapStdFile::SEEK_*`. Mise à jour stubs et README. |
+| 2026-09-04 | Phase 1 | ✅ Terminée | Ajout de `Dir::try_exists`, `Dir::set_own_times`, `Dir::set_times` (100% safe via `rustix::fs::utimensat`), `StephpCapStdDirBuilder` + `Dir::create_dir_with`, `Dir::read_link_contents`, `Dir::symlink_contents`, `File::read_at`/`read_exact_at`/`write_at`/`write_all_at`, `OpenOptions::custom_flags`, constantes `StephpCapStdFile::SEEK_*`. Mise à jour stubs et README. |
 | 2026-09-04 | Phase 2 | ✅ Terminée | Refonte du runner `php/test.php` avec auto-découverte et support du filtrage `--filter=...`. Nouveaux tests pour `metadata_extended`, `file_type`, `entries_iteration`, `systemtime_roundtrip`, `error_messages`, `seek_invalid`. Suite PHP : 167 OK / 0 KO. |
-| 2026-09-04 | Phase 3 | ✅ Terminée | Création du workflow GitHub Actions CI (`.github/workflows/ci.yml`), création du `Makefile` complet, bump de version à **0.6.0** dans `Cargo.toml` et `README.md`. |
+| 2026-09-04 | Phase 3 | ✅ Terminée | Création du workflow GitHub Actions CI (`.github/workflows/ci.yml`), création du `Makefile` complet, bump de version à **0.6.0** dans `Cargo.toml` et `README.md`, interdiction stricte de tout code `unsafe` (`[lints.rust] unsafe_code = "forbid"` et `#![forbid(unsafe_code)]`). |
