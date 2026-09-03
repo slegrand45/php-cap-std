@@ -22,7 +22,7 @@ This project leverages Artificial Intelligence. This `README.md` file, as well a
 1.  **Clone the repository:**
     ```bash
     git clone <repository-url>
-    cd php-cap-std
+    cd stephp-cap-std
     ```
 
 2.  **Build the project:**
@@ -60,7 +60,7 @@ try {
     $dir = stephp_cap_std_open_ambient_dir($auth, '/tmp/sandbox');
     
     // Write a file with specific options
-    $options = new StephpCapStdOpenOptions();
+    $options = StephpCapStdOpenOptions::new();
     $options->write(true);
     $options->create(true);
     $options->truncate(true);
@@ -88,6 +88,8 @@ try {
 }
 ```
 
+> **Note:** Extension classes cannot be instantiated with `new` from PHP. Use their static constructors instead: `StephpCapStdOpenOptions::new()`, `StephpCapStdPermissions::new($mode)`, `StephpCapStdSystemTime::from_unix_timestamp($seconds)`. The test suite in `php/` doubles as a usage reference.
+
 ## Available API
 
 As this extension provides direct bindings to the Rust [cap-std](https://docs.rs/cap-std/) library, it is highly recommended to consult its official documentation to understand the detailed behavior of each method and their respective parameters.
@@ -101,21 +103,21 @@ Main entry point for scoped filesystem operations.
 - **Files**: `open(string $path)`, `open_with(string $path, StephpCapStdOpenOptions $opts)`, `create(string $path)`, `read(string $path)`, `read_to_string(string $path)`, `write(string $path, string|Binary $data)`, `remove_file(string $path)`
 - **Directories**: `open_dir(string $path)`, `create_dir(string $path)`, `create_dir_all(string $path)`, `remove_dir(string $path)`, `remove_dir_all(string $path)`, `read_dir(string $path): StephpCapStdEntries`
 - **Inter-Directory**: `copy(string $from, StephpCapStdDir $to_dir, string $to)`, `rename(string $from, StephpCapStdDir $to_dir, string $to)`, `hard_link(string $src, StephpCapStdDir $dst_dir, string $dst)`
-- **Metadata/Info**: `exists(string $path)`, `is_file(string $path)`, `is_dir(string $path)`, `metadata(string $path)`, `symlink_metadata(string $path)`, `dir_metadata()`, `canonicalize(string $path)`, `read_link(string $path)`
+- **Metadata/Info**: `exists(string $path)`, `is_file(string $path)`, `is_dir(string $path)`, `metadata(string $path)`, `symlink_metadata(string $path)`, `dir_metadata()`, `canonicalize(string $path)`, `read_link(string $path)`, `try_clone()`
 - **System**: `set_permissions(string $path, StephpCapStdPermissions $p)`, `symlink(string $orig, string $link)`
 
 ### `StephpCapStdFile` (File Handle)
 - **IO**: `read(int $len)`, `read_to_end()`, `read_to_string()`, `write(string $data)`, `flush()`
 - **Position**: `seek(int $offset, int $whence)`, `seek_relative(int $offset)`, `rewind()`, `stream_position()`, `stream_len()`
-- **Management**: `sync_all()`, `sync_data()`, `set_len(int $size)`, `metadata()`, `set_permissions(StephpCapStdPermissions $p)`
+- **Management**: `sync_all()`, `sync_data()`, `set_len(int $size)`, `metadata()`, `set_permissions(StephpCapStdPermissions $p)`, `try_clone()`, `set_times(?StephpCapStdSystemTime $atime, ?StephpCapStdSystemTime $mtime)`
 
 ### `StephpCapStdOpenOptions`
-- `read(bool)`, `write(bool)`, `append(bool)`, `truncate(bool)`, `create(bool)`, `create_new(bool)`
+- `read(bool)`, `write(bool)`, `append(bool)`, `truncate(bool)`, `create(bool)`, `create_new(bool)`, `mode(int $mode)` (Unix only)
 
 ### `StephpCapStdMetadata`
-- `is_dir()`, `is_file()`, `is_symlink()`, `len()`, `size()`, `permissions()`
+- `is_dir()`, `is_file()`, `is_symlink()`, `len()`, `size()`, `file_type()`, `permissions()`
 - `modified()`, `accessed()`, `created()` (Returns `StephpCapStdSystemTime`)
-- Linux/Unix specific: `dev()`, `ino()`, `mode()`, `uid()`, `gid()`, `nlink()`, `blksize()`, `blocks()`, `atime()`, `mtime()`, `ctime()`
+- Linux/Unix specific: `dev()`, `ino()`, `mode()`, `uid()`, `gid()`, `nlink()`, `rdev()`, `blksize()`, `blocks()`, `atime()`, `mtime()`, `ctime()`, `atime_nsec()`, `mtime_nsec()`, `ctime_nsec()`
 
 ### `StephpCapStdEntries`
 Implements `Iterator` and `Countable`. Returned by `read_dir()`.
@@ -123,7 +125,7 @@ Implements `Iterator` and `Countable`. Returned by `read_dir()`.
 
 ### Supporting Classes
 - `StephpCapStdPermissions`: `readonly()`, `set_readonly(bool)`, `mode()`, `set_mode(int)`
-- `StephpCapStdSystemTime`: `to_unix_timestamp_seconds_utc()`
+- `StephpCapStdSystemTime`: `from_unix_timestamp(int $seconds)` (static), `to_unix_timestamp_seconds_utc()`
 - `StephpCapStdFileType`: `is_dir()`, `is_file()`, `is_symlink()`
 
 ## 🧪 Testing

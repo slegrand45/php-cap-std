@@ -17,15 +17,6 @@ pub struct EntriesInternal {
 
 #[php_impl]
 impl StephpCapStdEntries {
-    pub fn new(entries: Vec<String>) -> Self {
-        Self {
-            inner: Mutex::new(EntriesInternal {
-                entries,
-                current_index: 0,
-            }),
-        }
-    }
-
     pub fn count(&self) -> usize {
         self.inner
             .lock()
@@ -62,5 +53,18 @@ impl StephpCapStdEntries {
             .lock()
             .map(|inner| inner.current_index < inner.entries.len())
             .unwrap_or(false)
+    }
+}
+
+// Internal constructor, intentionally not exposed to PHP: entries objects
+// are only produced by the extension (Dir::entries / Dir::read_dir).
+impl StephpCapStdEntries {
+    pub fn new(entries: Vec<String>) -> Self {
+        Self {
+            inner: Mutex::new(EntriesInternal {
+                entries,
+                current_index: 0,
+            }),
+        }
     }
 }

@@ -61,16 +61,20 @@ impl StephpCapStdOpenOptions {
     }
 
     #[php(name = "mode")]
-    pub fn mode(&mut self, mode: u32) {
+    pub fn mode(&mut self, mode: u32) -> Result<(), String> {
         #[cfg(unix)]
         {
-            if let Ok(mut options) = self.inner.lock() {
-                options.mode(mode);
-            }
+            let mut options = self
+                .inner
+                .lock()
+                .map_err(|_| "Mutex lock error".to_string())?;
+            options.mode(mode);
+            Ok(())
         }
         #[cfg(not(unix))]
         {
             let _ = mode;
+            Err("mode is only available on Unix systems".to_string())
         }
     }
 }

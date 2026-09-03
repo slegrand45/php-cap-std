@@ -13,10 +13,17 @@ pub struct StephpCapStdPermissions {
 
 #[php_impl]
 impl StephpCapStdPermissions {
-    #[cfg(unix)]
-    pub fn new(mode: u32) -> Self {
-        Self {
-            inner: Mutex::new(cap_std::fs::Permissions::from_mode(mode)),
+    pub fn new(mode: u32) -> Result<Self, String> {
+        #[cfg(unix)]
+        {
+            Ok(Self {
+                inner: Mutex::new(cap_std::fs::Permissions::from_mode(mode)),
+            })
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = mode;
+            Err("Permissions::new is only available on Unix systems".to_string())
         }
     }
 
