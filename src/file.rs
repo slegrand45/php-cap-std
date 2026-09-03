@@ -1,5 +1,8 @@
 #![cfg_attr(windows, feature(abi_vectorcall))]
 
+#[cfg(unix)]
+use cap_std::fs::FileExt;
+
 use crate::metadata;
 use crate::permissions::StephpCapStdPermissions;
 use ext_php_rs::binary::Binary;
@@ -19,6 +22,10 @@ pub struct StephpCapStdFile {
 
 #[php_impl]
 impl StephpCapStdFile {
+    pub const SEEK_SET: i32 = 0;
+    pub const SEEK_CUR: i32 = 1;
+    pub const SEEK_END: i32 = 2;
+
     #[php(name = "sync_all")]
     pub fn sync_all(&self) -> Result<(), String> {
         let file = self
@@ -110,6 +117,46 @@ impl StephpCapStdFile {
         Ok(data)
     }
 
+    #[php(name = "read_at")]
+    pub fn read_at(&self, length: usize, offset: u64) -> Result<Binary<u8>, String> {
+        #[cfg(unix)]
+        {
+            let file = self
+                .inner
+                .lock()
+                .map_err(|_| "Mutex lock error".to_string())?;
+            let mut data = vec![0u8; length];
+            let bytes_read = file.read_at(&mut data, offset).map_err(|e| e.to_string())?;
+            data.truncate(bytes_read);
+            Ok(Binary::from(data))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (length, offset);
+            Err("read_at is only available on Unix systems".to_string())
+        }
+    }
+
+    #[php(name = "read_exact_at")]
+    pub fn read_exact_at(&self, length: usize, offset: u64) -> Result<Binary<u8>, String> {
+        #[cfg(unix)]
+        {
+            let file = self
+                .inner
+                .lock()
+                .map_err(|_| "Mutex lock error".to_string())?;
+            let mut data = vec![0u8; length];
+            file.read_exact_at(&mut data, offset)
+                .map_err(|e| e.to_string())?;
+            Ok(Binary::from(data))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (length, offset);
+            Err("read_exact_at is only available on Unix systems".to_string())
+        }
+    }
+
     #[php(name = "write")]
     pub fn write(&self, data: BinarySlice<u8>) -> Result<usize, String> {
         let mut file = self
@@ -117,6 +164,45 @@ impl StephpCapStdFile {
             .lock()
             .map_err(|_| "Mutex lock error".to_string())?;
         file.write(&data).map_err(|e| format!("Write error: {}", e))
+    }
+
+    #[php(name = "write_at")]
+    pub fn write_at(&self, data: BinarySlice<u8>, offset: u64) -> Result<usize, String> {
+        #[cfg(unix)]
+        {
+            let file = self
+                .inner
+                .lock()
+                .map_err(|_| "Mutex lock error".to_string())?;
+            let bytes_written = file
+                .write_at(data.as_ref(), offset)
+                .map_err(|e| e.to_string())?;
+            Ok(bytes_written)
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (data, offset);
+            Err("write_at is only available on Unix systems".to_string())
+        }
+    }
+
+    #[php(name = "write_all_at")]
+    pub fn write_all_at(&self, data: BinarySlice<u8>, offset: u64) -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            let file = self
+                .inner
+                .lock()
+                .map_err(|_| "Mutex lock error".to_string())?;
+            file.write_all_at(data.as_ref(), offset)
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (data, offset);
+            Err("write_all_at is only available on Unix systems".to_string())
+        }
     }
 
     #[php(name = "flush")]

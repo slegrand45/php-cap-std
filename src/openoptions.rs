@@ -77,4 +77,22 @@ impl StephpCapStdOpenOptions {
             Err("mode is only available on Unix systems".to_string())
         }
     }
+
+    #[php(name = "custom_flags")]
+    pub fn custom_flags(&mut self, flags: i32) -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            let mut options = self
+                .inner
+                .lock()
+                .map_err(|_| "Mutex lock error".to_string())?;
+            options.custom_flags(flags);
+            Ok(())
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = flags;
+            Err("custom_flags is only available on Unix systems".to_string())
+        }
+    }
 }

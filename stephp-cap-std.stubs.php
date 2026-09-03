@@ -83,6 +83,13 @@ namespace {
         public function create_dir_all(string $path): void {}
 
         /**
+         * Creates a directory using custom configuration options from a
+         * StephpCapStdDirBuilder (e.g. recursive, custom Unix mode).
+         * @throws \Exception on I/O error
+         */
+        public function create_dir_with(string $path, \StephpCapStdDirBuilder $builder): void {}
+
+        /**
          * Copies a file into another directory. Returns the number of
          * bytes copied. Permission bits are copied as well.
          * @throws \Exception on I/O error
@@ -161,6 +168,12 @@ namespace {
         public function exists(string $path): bool {}
 
         /**
+         * Returns whether the path exists, returning an error on I/O failure.
+         * @throws \Exception on I/O error
+         */
+        public function try_exists(string $path): bool {}
+
+        /**
          * Creates a hard link into another directory.
          * @throws \Exception on I/O error
          */
@@ -181,6 +194,12 @@ namespace {
         public function read_link(string $path): string {}
 
         /**
+         * Returns the verbatim target of a symbolic link without validation.
+         * @throws \Exception on I/O error
+         */
+        public function read_link_contents(string $path): string {}
+
+        /**
          * Returns the metadata of the entry at the given path without
          * following symlinks.
          * @throws \Exception on I/O error
@@ -199,6 +218,27 @@ namespace {
          * @throws \Exception on I/O error or on non-Unix platforms
          */
         public function symlink(string $original, string $link): void {}
+
+        /**
+         * Creates a symbolic link with arbitrary contents. Unix only.
+         * @throws \Exception on I/O error or on non-Unix platforms
+         */
+        public function symlink_contents(string $original, string $link): void {}
+
+        /**
+         * Sets the last access and/or modification times of the directory
+         * handle itself. Pass null to leave a timestamp unchanged.
+         * @throws \Exception on I/O error
+         */
+        public function set_own_times(?\StephpCapStdSystemTime $atime = null, ?\StephpCapStdSystemTime $mtime = null): void {}
+
+        /**
+         * Sets the last access and/or modification times of an entry
+         * (file or directory) at the given relative path.
+         * Pass null to leave a timestamp unchanged.
+         * @throws \Exception on I/O error
+         */
+        public function set_times(string $path, ?\StephpCapStdSystemTime $atime = null, ?\StephpCapStdSystemTime $mtime = null): void {}
 
         /**
          * Duplicates the directory handle, sharing the same underlying
@@ -383,6 +423,10 @@ namespace {
      * but not transactional.
      */
     class StephpCapStdFile {
+        public const SEEK_SET = 0;
+        public const SEEK_CUR = 1;
+        public const SEEK_END = 2;
+
         /**
          * Flushes OS buffers, syncing data and metadata to disk.
          * @throws \Exception on I/O error
@@ -437,11 +481,39 @@ namespace {
         public function read_to_string(): string {}
 
         /**
+         * Reads up to the given number of bytes at a fixed offset without
+         * modifying the cursor. Unix only.
+         * @throws \Exception on I/O error or on non-Unix platforms
+         */
+        public function read_at(int $length, int $offset): string {}
+
+        /**
+         * Reads exactly the given number of bytes at a fixed offset without
+         * modifying the cursor. Unix only.
+         * @throws \Exception on I/O error, unexpected EOF, or on non-Unix platforms
+         */
+        public function read_exact_at(int $length, int $offset): string {}
+
+        /**
          * Writes binary-safe data at the current cursor. Returns the
          * number of bytes written.
          * @throws \Exception on I/O error
          */
         public function write(string $data): int {}
+
+        /**
+         * Writes binary-safe data at a fixed offset without modifying the
+         * cursor. Unix only. Returns the number of bytes written.
+         * @throws \Exception on I/O error or on non-Unix platforms
+         */
+        public function write_at(string $data, int $offset): int {}
+
+        /**
+         * Writes all binary-safe data at a fixed offset without modifying the
+         * cursor. Unix only.
+         * @throws \Exception on I/O error or on non-Unix platforms
+         */
+        public function write_all_at(string $data, int $offset): void {}
 
         /**
          * No-op for consistency with PHP streams; writes are not buffered
@@ -471,8 +543,9 @@ namespace {
 
         /**
          * Moves the cursor to an absolute or relative position. $whence is
-         * one of the STEHP_CAP_STD_SEEK_SET / _SEEK_CUR / _SEEK_END
-         * constants (0, 1, 2). Returns the resulting position.
+         * one of the StephpCapStdFile::SEEK_SET / SEEK_CUR / SEEK_END
+         * constants (0, 1, 2) or standard PHP SEEK_* constants.
+         * Returns the resulting position.
          * @throws \Exception on I/O error or invalid $whence
          */
         public function seek(int $offset, int $whence): int {}
@@ -608,6 +681,36 @@ namespace {
 
         /**
          * Sets Unix mode bits used when creating the file (e.g. 0644).
+         * Unix only.
+         * @throws \Exception on non-Unix platforms
+         */
+        public function mode(int $mode): void {}
+
+        /**
+         * Passes custom flags (such as O_NOATIME, O_CLOEXEC) to open().
+         * Unix only.
+         * @throws \Exception on non-Unix platforms
+         */
+        public function custom_flags(int $flags): void {}
+    }
+
+    /**
+     * Builder for creating directories with custom options.
+     * Consumed by StephpCapStdDir::create_dir_with().
+     */
+    class StephpCapStdDirBuilder {
+        /**
+         * Builds a default directory builder.
+         */
+        public static function new(): \StephpCapStdDirBuilder {}
+
+        /**
+         * Configures whether parent directories should be created if missing.
+         */
+        public function recursive(bool $recursive): void {}
+
+        /**
+         * Sets Unix mode bits used when creating the directory (e.g. 0755).
          * Unix only.
          * @throws \Exception on non-Unix platforms
          */

@@ -14,34 +14,34 @@
 | 0.4 | **Cohérence `cfg(unix)`** | `StephpCapStdPermissions::new()` est gated sur toute la méthode, contrairement à la convention posée au commit 8cc6228. `OpenOptions::mode()` no-op silencieux sur non-unix → devrait retourner `Result<(), String>`. |
 | 0.5 | **Nettoyage** | Migrer `NOTES-TMP.txt` vers des tickets/ROADMAP puis le supprimer. |
 
-## Phase 1 — Complétion de l'API cap-std (P1)
+## Phase 1 — Complétion de l'API cap-std (P1) — ✅ TERMINÉE
 
 Deux découvertes importantes issues de la vérification de l'API cap-std 4.0.2 :
 
-- **`Dir::set_times(path, ...)` n'existe pas dans cap-std** — c'est pourquoi ça a « ECHOUE ». cap-std n'offre le SetTimes (via fs-set-times) que sur un **handle ouvert** (`File` déjà fait ; `Dir` l'a aussi via impl blanket). Solution propre : méthode de commodité `Dir::set_times(string $path, ?StphpCapStdSystemTime $atime, ?$mtime)` qui ouvre le handle en interne (`open` pour un fichier, `open_dir` pour un répertoire) puis applique SetTimes, + éventuellement `set_own_times()` sur le handle lui-même.
-- **`open_parent()` s'appelle `open_parent_dir(auth)`** et prend l'AmbientAuthority : il **sort du sandbox par conception**. À binder avec un avertissement de sécurité explicite dans les stubs/README.
+- **`Dir::set_times(path, ...)` n'existe pas dans cap-std** — cap-std n'offre le SetTimes que sur un handle ouvert. Implémenté via `utimensat` (POSIX direct sur `dirfd`) pour `set_own_times()` et `set_times(path, atime, mtime)`, évitant le piège de `EBADF` lié aux descripteurs `O_PATH` sous Linux.
+- **`open_parent_dir(auth)`** : omis volontairement car il sort du sandbox par conception.
 
 Ordre de valeur :
 
-1. `Dir::set_times` (le « A REFAIRE »), `Dir::try_exists`
-2. Classe `StephpCapStdDirBuilder` (mode, recursive) + `Dir::create_dir_with`
-3. `Dir::read_link_contents`, `Dir::symlink_contents`
-4. `File::read_at` / `write_at` / `read_exact_at` / `write_all_at` (Unix `FileExt` — I/O à offset fixe)
-5. `OpenOptions::custom_flags` (O_NOATIME, etc.), constantes `SEEK_SET/CUR/END` exportées (ext-php-rs `const`) au lieu d'entiers magiques
-6. **Non-objectifs assumés** (à documenter) : fonctions ambient de `File` (affaiblissent le sandbox), sockets Unix (« not yet implemented » dans cap-std lui-même), `from_std/into_std` (sans sens en PHP), `remove_open_dir` (consomme `self` — binding ext-php-rs hasardeux, à trancher).
+1. `Dir::set_times`, `Dir::set_own_times`, `Dir::try_exists` (implémentés et testés)
+2. Classe `StephpCapStdDirBuilder` (mode, recursive) + `Dir::create_dir_with` (implémentés et testés)
+3. `Dir::read_link_contents`, `Dir::symlink_contents` (implémentés et testés)
+4. `File::read_at` / `write_at` / `read_exact_at` / `write_all_at` (Unix `FileExt` — I/O à offset fixe, implémentés et testés)
+5. `OpenOptions::custom_flags`, constantes `StephpCapStdFile::SEEK_SET/CUR/END` (implémentés et testés)
+6. **Non-objectifs assumés** (documentés) : fonctions ambient de `File` (affaiblissent le sandbox), sockets Unix (« not yet implemented » dans cap-std lui-même), `from_std/into_std` (sans sens en PHP), `open_parent_dir` (casse l'isolation), `remove_open_dir` (consomme `self`).
 
-## Phase 2 — Durabilité des tests (P1)
+## Phase 2 — Durabilité des tests (P1) — ✅ TERMINÉE
 
-1. **Auto-découverte des tests** dans `test.php` (glob sur `dir/*.php`, `file/*.php` + convention nom de fichier = nom de fonction) — supprime la double saisie include+appel, source d'oubli.
-2. Argument `--filter=dir/write` pour lancer un seul test (impossible aujourd'hui : un fichier seul ne fait que définir la fonction).
-3. Trous de couverture : `Metadata` unix (`rdev`, `*_nsec`), `file_type()`, `Entries` en `foreach`+`count()`, round-trip `from_unix_timestamp`, messages d'erreur (chemin inexistant), `seek` avec `whence` invalide.
-4. Recommandation : **garder le harness maison** plutôt que migrer à PHPUnit (le plan cursor le disait « éventuel »). Argument : la suite doit tourner avec `-d extension=...`, PHPUnit n'apporte rien ici et ajoute une dépendance.
+1. **Auto-découverte des tests** dans `test.php` (scan récursif des fichiers `.php` dans `php/` et exécution automatique des fonctions déclarées dans le namespace `tests\`).
+2. Argument `--filter=<pattern>` pour lancer un sous-ensemble de tests (ex: `--filter=dir/write`, `--filter=offset_io`).
+3. Comblement des trous de couverture : `Metadata` unix (`dev`, `ino`, `mode`, `nlink`, `uid`, `gid`, `rdev`, `size`, `*_nsec`, `blksize`, `blocks`), `file_type()`, `Entries` (`count()`, `foreach`, méthodes d'itération), round-trip `from_unix_timestamp`, messages d'erreur et cas d'erreurs `seek`.
+4. Maintien du harness maison léger et rapide.
 
-## Phase 3 — CI et outillage (P2)
+## Phase 3 — CI et outillage (P2) — ✅ TERMINÉE
 
-1. **GitHub Actions** (ubuntu) : `cargo fmt --check`, `cargo clippy -D warnings`, `cargo build --release`, puis exécution de la suite PHP. Aujourd'hui Dependabot ouvre des PR sans aucune validation automatique.
-2. Makefile ou justfile : `build`, `test`, `lint`, `fmt`.
-3. Synchronisation de version Cargo.toml ↔ README (checklist ou script sed).
+1. **GitHub Actions** (`.github/workflows/ci.yml`) : validation automatique sous Ubuntu (`cargo fmt --check`, `cargo clippy -D warnings`, `cargo build --release`, suite de tests PHP).
+2. **Makefile** : cibles `build`, `build-debug`, `test`, `lint`, `fmt`, `fmt-check`, `check`, `clean`.
+3. Synchronisation de la version à **0.6.0** dans `Cargo.toml` et `README.md`.
 
 ## Phase 4 — Évolutions stratégiques (P3)
 
@@ -60,3 +60,6 @@ Ordre de valeur :
 | Date | Phase | Statut | Détail |
 |---|---|---|---|
 | 2026-09-03 | Phase 0 | ✅ Terminée | README (exemple `::new()`, nom du dépôt, API complétée) ; stubs réécrits avec DocBlocks, `__construct` factices et `Entries::new()` supprimés ; `Permissions::new()` et `OpenOptions::mode()` retournent désormais `Result` (breaking, justifie 0.6.0) ; constructeur interne d'Entries sorti du `#[php_impl]` (masqué côté PHP) ; `NOTES-TMP.txt` supprimé (idées restantes reprises dans Phase 4 / non-objectifs). Suite PHP : 114 OK / 0 KO. |
+| 2026-09-04 | Phase 1 | ✅ Terminée | Ajout de `Dir::try_exists`, `Dir::set_own_times`, `Dir::set_times` (via `utimensat`), `StephpCapStdDirBuilder` + `Dir::create_dir_with`, `Dir::read_link_contents`, `Dir::symlink_contents`, `File::read_at`/`read_exact_at`/`write_at`/`write_all_at`, `OpenOptions::custom_flags`, constantes `StephpCapStdFile::SEEK_*`. Mise à jour stubs et README. |
+| 2026-09-04 | Phase 2 | ✅ Terminée | Refonte du runner `php/test.php` avec auto-découverte et support du filtrage `--filter=...`. Nouveaux tests pour `metadata_extended`, `file_type`, `entries_iteration`, `systemtime_roundtrip`, `error_messages`, `seek_invalid`. Suite PHP : 167 OK / 0 KO. |
+| 2026-09-04 | Phase 3 | ✅ Terminée | Création du workflow GitHub Actions CI (`.github/workflows/ci.yml`), création du `Makefile` complet, bump de version à **0.6.0** dans `Cargo.toml` et `README.md`. |

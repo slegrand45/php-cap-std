@@ -1,13 +1,14 @@
 #![cfg_attr(windows, feature(abi_vectorcall))]
 
+use crate::dirbuilder::StephpCapStdDirBuilder;
 use crate::entries;
 use crate::file;
 use crate::metadata;
 use crate::metadata::StephpCapStdMetadata;
 use crate::openoptions::StephpCapStdOpenOptions;
 use crate::permissions::StephpCapStdPermissions;
+use crate::systemtime::StephpCapStdSystemTime;
 use ext_php_rs::binary::Binary;
-
 use ext_php_rs::binary_slice::BinarySlice;
 use ext_php_rs::prelude::*;
 use std::sync::Mutex;
@@ -102,6 +103,22 @@ impl StephpCapStdDir {
         }
     }
 
+    #[php(name = "create_dir_with")]
+    pub fn create_dir_with(
+        &self,
+        path: &str,
+        builder: &StephpCapStdDirBuilder,
+    ) -> Result<(), String> {
+        let builder = builder
+            .inner
+            .lock()
+            .map_err(|_| "Mutex lock error".to_string())?;
+        self.inner
+            .create_dir_with(path, &builder)
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     #[php(name = "copy")]
     pub fn copy(&self, from: &str, to_dir: &StephpCapStdDir, to: &str) -> Result<u64, String> {
         match self.inner.copy(from, &to_dir.inner, to) {
@@ -183,6 +200,11 @@ impl StephpCapStdDir {
         self.inner.exists(path)
     }
 
+    #[php(name = "try_exists")]
+    pub fn try_exists(&self, path: &str) -> Result<bool, String> {
+        self.inner.try_exists(path).map_err(|e| e.to_string())
+    }
+
     #[php(name = "hard_link")]
     pub fn hard_link(&self, src: &str, dst_dir: &StephpCapStdDir, dst: &str) -> Result<(), String> {
         match self.inner.hard_link(src, &dst_dir.inner, dst) {
@@ -201,6 +223,15 @@ impl StephpCapStdDir {
     pub fn read_link(&self, path: &str) -> Result<String, String> {
         let read = self.inner.read_link(path).map_err(|e| e.to_string())?;
         Ok(read.to_string_lossy().to_string())
+    }
+
+    #[php(name = "read_link_contents")]
+    pub fn read_link_contents(&self, path: &str) -> Result<String, String> {
+        let path_buf = self
+            .inner
+            .read_link_contents(path)
+            .map_err(|e| e.to_string())?;
+        Ok(path_buf.to_string_lossy().to_string())
     }
 
     #[php(name = "symlink_metadata")]
@@ -253,9 +284,110 @@ impl StephpCapStdDir {
         }
     }
 
+    #[php(name = "symlink_contents")]
+    pub fn symlink_contents(&self, original: &str, link: &str) -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            self.inner
+                .symlink_contents(original, link)
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (original, link);
+            Err("symlink_contents is only available on Unix systems".to_string())
+        }
+    }
+
+    #[php(name = "set_own_times")]
+    pub fn set_own_times(
+        &self,
+        atime: Option<&StephpCapStdSystemTime>,
+        mtime: Option<&StephpCapStdSystemTime>,
+    ) -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::io::AsRawFd;
+            let empty_path = std::ffi::CString::new("").map_err(|e| e.to_string())?;
+            let times = times_to_timespec(atime, mtime);
+            let res = unsafe {
+                libc::utimensat(
+                    self.inner.as_raw_fd(),
+                    empty_path.as_ptr(),
+                    times.as_ptr(),
+                    libc::AT_EMPTY_PATH,
+                )
+            };
+            if res != 0 {
+                return Err(std::io::Error::last_os_error().to_string());
+            }
+            Ok(())
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (atime, mtime);
+            Err("set_own_times is only available on Unix systems".to_string())
+        }
+    }
+
+    #[php(name = "set_times")]
+    pub fn set_times(
+        &self,
+        path: &str,
+        atime: Option<&StephpCapStdSystemTime>,
+        mtime: Option<&StephpCapStdSystemTime>,
+    ) -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::io::AsRawFd;
+            if path == "." || path.is_empty() {
+                return self.set_own_times(atime, mtime);
+            }
+            let c_path = std::ffi::CString::new(path).map_err(|e| e.to_string())?;
+            let times = times_to_timespec(atime, mtime);
+            let res = unsafe {
+                libc::utimensat(self.inner.as_raw_fd(), c_path.as_ptr(), times.as_ptr(), 0)
+            };
+            if res != 0 {
+                return Err(std::io::Error::last_os_error().to_string());
+            }
+            Ok(())
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (path, atime, mtime);
+            Err("set_times is only available on Unix systems".to_string())
+        }
+    }
+
     #[php(name = "try_clone")]
     pub fn try_clone(&self) -> Result<Self, String> {
         let clone = self.inner.try_clone().map_err(|e| e.to_string())?;
         Ok(Self { inner: clone })
     }
+}
+
+#[cfg(unix)]
+fn times_to_timespec(
+    atime: Option<&StephpCapStdSystemTime>,
+    mtime: Option<&StephpCapStdSystemTime>,
+) -> [libc::timespec; 2] {
+    let to_spec = |opt: Option<&StephpCapStdSystemTime>| match opt {
+        Some(t) => {
+            let dur = t
+                .inner
+                .duration_since(cap_std::time::SystemTime::from_std(std::time::UNIX_EPOCH))
+                .unwrap_or_default();
+            libc::timespec {
+                tv_sec: dur.as_secs() as libc::time_t,
+                tv_nsec: dur.subsec_nanos() as libc::c_long,
+            }
+        }
+        None => libc::timespec {
+            tv_sec: 0,
+            tv_nsec: libc::UTIME_OMIT,
+        },
+    };
+    [to_spec(atime), to_spec(mtime)]
 }

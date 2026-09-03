@@ -1,6 +1,7 @@
 #![cfg_attr(windows, feature(abi_vectorcall))]
 
 mod dir;
+mod dirbuilder;
 mod entries;
 mod file;
 mod filetype;
@@ -40,6 +41,7 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .function(wrap_function!(stephp_cap_std_open_ambient_dir))
         .class::<StephpCapStdAmbientAuthority>()
         .class::<dir::StephpCapStdDir>()
+        .class::<dirbuilder::StephpCapStdDirBuilder>()
         .class::<entries::StephpCapStdEntries>()
         .class::<metadata::StephpCapStdMetadata>()
         .class::<file::StephpCapStdFile>()

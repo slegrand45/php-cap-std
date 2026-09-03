@@ -1,6 +1,6 @@
 # stephp-cap-std
 
-**Version 0.5.0**
+**Version 0.6.0**
 
 `stephp-cap-std` is an experimental PHP extension written in Rust. It provides bindings to the [cap-std](https://github.com/bytecodealliance/cap-std) crate, offering a **capability-based security** approach for filesystem access. This project is made possible thanks to the [ext-php-rs](https://github.com/extphprs/ext-php-rs) project, which provides the tools to build PHP extensions with Rust.
 
@@ -101,18 +101,23 @@ As this extension provides direct bindings to the Rust [cap-std](https://docs.rs
 ### `StephpCapStdDir` (Directory Handle)
 Main entry point for scoped filesystem operations.
 - **Files**: `open(string $path)`, `open_with(string $path, StephpCapStdOpenOptions $opts)`, `create(string $path)`, `read(string $path)`, `read_to_string(string $path)`, `write(string $path, string|Binary $data)`, `remove_file(string $path)`
-- **Directories**: `open_dir(string $path)`, `create_dir(string $path)`, `create_dir_all(string $path)`, `remove_dir(string $path)`, `remove_dir_all(string $path)`, `read_dir(string $path): StephpCapStdEntries`
+- **Directories**: `open_dir(string $path)`, `create_dir(string $path)`, `create_dir_all(string $path)`, `create_dir_with(string $path, StephpCapStdDirBuilder $builder)`, `remove_dir(string $path)`, `remove_dir_all(string $path)`, `read_dir(string $path): StephpCapStdEntries`
 - **Inter-Directory**: `copy(string $from, StephpCapStdDir $to_dir, string $to)`, `rename(string $from, StephpCapStdDir $to_dir, string $to)`, `hard_link(string $src, StephpCapStdDir $dst_dir, string $dst)`
-- **Metadata/Info**: `exists(string $path)`, `is_file(string $path)`, `is_dir(string $path)`, `metadata(string $path)`, `symlink_metadata(string $path)`, `dir_metadata()`, `canonicalize(string $path)`, `read_link(string $path)`, `try_clone()`
-- **System**: `set_permissions(string $path, StephpCapStdPermissions $p)`, `symlink(string $orig, string $link)`
+- **Metadata/Info**: `exists(string $path)`, `try_exists(string $path)`, `is_file(string $path)`, `is_dir(string $path)`, `metadata(string $path)`, `symlink_metadata(string $path)`, `dir_metadata()`, `canonicalize(string $path)`, `read_link(string $path)`, `read_link_contents(string $path)`, `try_clone()`
+- **Timestamps & System**: `set_own_times(?StephpCapStdSystemTime $atime, ?StephpCapStdSystemTime $mtime)`, `set_times(string $path, ?StephpCapStdSystemTime $atime, ?StephpCapStdSystemTime $mtime)`, `set_permissions(string $path, StephpCapStdPermissions $p)`, `symlink(string $orig, string $link)`, `symlink_contents(string $orig, string $link)`
 
 ### `StephpCapStdFile` (File Handle)
+- **Constants**: `StephpCapStdFile::SEEK_SET`, `StephpCapStdFile::SEEK_CUR`, `StephpCapStdFile::SEEK_END`
 - **IO**: `read(int $len)`, `read_to_end()`, `read_to_string()`, `write(string $data)`, `flush()`
+- **Offset IO (Unix)**: `read_at(int $len, int $offset)`, `read_exact_at(int $len, int $offset)`, `write_at(string $data, int $offset)`, `write_all_at(string $data, int $offset)`
 - **Position**: `seek(int $offset, int $whence)`, `seek_relative(int $offset)`, `rewind()`, `stream_position()`, `stream_len()`
 - **Management**: `sync_all()`, `sync_data()`, `set_len(int $size)`, `metadata()`, `set_permissions(StephpCapStdPermissions $p)`, `try_clone()`, `set_times(?StephpCapStdSystemTime $atime, ?StephpCapStdSystemTime $mtime)`
 
 ### `StephpCapStdOpenOptions`
-- `read(bool)`, `write(bool)`, `append(bool)`, `truncate(bool)`, `create(bool)`, `create_new(bool)`, `mode(int $mode)` (Unix only)
+- `new()` (static), `read(bool)`, `write(bool)`, `append(bool)`, `truncate(bool)`, `create(bool)`, `create_new(bool)`, `mode(int $mode)` (Unix only), `custom_flags(int $flags)` (Unix only)
+
+### `StephpCapStdDirBuilder`
+- `new()` (static), `recursive(bool)`, `mode(int $mode)` (Unix only)
 
 ### `StephpCapStdMetadata`
 - `is_dir()`, `is_file()`, `is_symlink()`, `len()`, `size()`, `file_type()`, `permissions()`
@@ -124,18 +129,26 @@ Implements `Iterator` and `Countable`. Returned by `read_dir()`.
 - `count()`, `rewind()`, `current()`, `key()`, `next()`, `valid()`
 
 ### Supporting Classes
-- `StephpCapStdPermissions`: `readonly()`, `set_readonly(bool)`, `mode()`, `set_mode(int)`
+- `StephpCapStdPermissions`: `new(int $mode)` (static, Unix), `readonly()`, `set_readonly(bool)`, `mode()`, `set_mode(int)`
 - `StephpCapStdSystemTime`: `from_unix_timestamp(int $seconds)` (static), `to_unix_timestamp_seconds_utc()`
 - `StephpCapStdFileType`: `is_dir()`, `is_file()`, `is_symlink()`
 
 ## 🧪 Testing
 
-The project includes a comprehensive set of tests located in the `php/` directory. These tests serve as both verification and usage examples.
+The project includes an auto-discovering test runner located in `php/test.php`.
 
-To run the tests:
+To run the full test suite:
 ```bash
+make test
+# Or directly via PHP:
 cd php/
 php -d extension=../target/release/libstephp_cap_std.so test.php
+```
+
+To run a single test or a subset of tests using a filter pattern:
+```bash
+cd php/
+php -d extension=../target/release/libstephp_cap_std.so test.php --filter=dir/write
 ```
 
 ## Limitations and Warnings

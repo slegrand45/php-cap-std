@@ -1,6 +1,6 @@
 [package]
 name = "stephp-cap-std"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 keywords = ["php", "ext-php-rs", "cap-std", "sandbox", "security"]
 categories = ["api-bindings", "filesystem"]
@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 ext-php-rs = "0.15.12"
 cap-std = "4.0.2"
 fs-set-times = "0.20.3"
+libc = "0.2"
 
 [profile.release]
 strip = "debuginfo"
